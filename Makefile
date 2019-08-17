@@ -4,13 +4,17 @@
 #   Tested on Windows 10 x64 + Cygwin x64 + Lattice Diamond 3.10
 #
 #   The default folder structure is assumed as
-#   <project>/
-#            +-constr  : synthesis constraints (*.sdc).
-#            +-hdl     : HDL sources (*.v)
-#            +-inc     : include files (*.h)
-#            +-netlist : netlist output
-#            +-synth   : synthesis workdir
-#            Makefile  : this file
+#   <prj_root>/
+#     +-build   : build folder
+#       +-bit   : bitgen artefacts, bitfile for FPGA programming drops here
+#       +-map   : map artefacts
+#       +-ngd   : ngdbuild artefacts
+#       +-par   : place & route artefacts
+#       +-syn   : synthesis artefacts
+#     +-constr  : synthesis constraints (*.sdc).
+#     +-hdl     : HDL sources (*.v)
+#     +-inc     : include files (*.vh)
+#     Makefile  : this file
 #
 # TODO:
 #   move synthesis options, part, package, etc. to make variables.
