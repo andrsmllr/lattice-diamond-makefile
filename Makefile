@@ -15,6 +15,7 @@
 # TODO:
 #   move synthesis options, part, package, etc. to make variables.
 #   support more options
+#   get rid of all those realpath --relative-to substitutions
 
 PRJ_ROOT=.
 SEP=/
@@ -37,6 +38,7 @@ INCLUDE_PATH=${PRJ_ROOT}${SEP}inc
 DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/ispfpga/bin/nt64/
 #DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/
 
+BUILD_PATH=${PRJ_ROOT}${SEP}build
 #SYNTH_TOOL=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/synpwrap.exe
 #SYNTH_FOLDER=${PRJ_ROOT}${SEP}synth
 #SYNTH_SCRIPT=${SYNTH_FOLDER}${SEP}${TOP}_synth.tcl
@@ -44,7 +46,7 @@ DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/ispfpga/bin/nt64/
 #SYNTH_LOG=${SYNTH_FOLDER}${SEP}${TOP}.srp
 
 SYNTH_TOOL=${DIAMOND_PATH}${SEP}synthesis.exe
-SYNTH_FOLDER=${PRJ_ROOT}${SEP}syn
+SYNTH_FOLDER=${BUILD_PATH}${SEP}syn
 SYNTH_FILES_VLOG=$(shell find ${HDL_PATH} \( -name "*.v" -o -name "*.sv" \) -exec realpath --relative-to=${SYNTH_FOLDER} {} \;)
 SYNTH_FILES_VHDL=$(shell find ${HDL_PATH} \( -name "*.vhd" -o -name "*.vhdl" \) -exec realpath --relative-to=${SYNTH_FOLDER} {} \;)
 SYNTH_OPT.HDL_PARAMS=
@@ -56,25 +58,25 @@ SYNTH_PREF_FILE=${SYNTH_FOLDER}${SEP}${TOP}.lpf
 SYNTH_LOG=${SYNTH_FOLDER}${SEP}${TOP}.syn.log
 
 NGD_TOOL=${DIAMOND_PATH}${SEP}ngdbuild.exe
-NGD_FOLDER=${PRJ_ROOT}${SEP}ngdbld
+NGD_FOLDER=${BUILD_PATH}${SEP}ngdbld
 NGD_SCRIPT=${NGD_FOLDER}${SEP}${TOP}_ngdbuild.tcl
 NGD_NETLIST=${NGD_FOLDER}${SEP}${TOP}.ngd
 NGD_LOG=${NGD_FOLDER}${SEP}${TOP}.ngd.log
 
 MAP_TOOL=${DIAMOND_PATH}${SEP}map.exe
-MAP_FOLDER=${PRJ_ROOT}${SEP}map
+MAP_FOLDER=${BUILD_PATH}${SEP}map
 MAP_SCRIPT=${MAP_FOLDER}${SEP}${TOP}_map.tcl
 MAP_NETLIST=${MAP_FOLDER}${SEP}${TOP}.ncd
 MAP_LOG=${MAP_FOLDER}${SEP}${TOP}.map.log
 
 PAR_TOOL=${DIAMOND_PATH}${SEP}par.exe
-PAR_FOLDER=${PRJ_ROOT}${SEP}par
+PAR_FOLDER=${BUILD_PATH}${SEP}par
 PAR_SCRIPT=${PAR_FOLDER}${SEP}${TOP}_par.tcl
 PAR_NETLIST=${PAR_FOLDER}${SEP}${TOP}.ncd
 PAR_LOG=${PAR_FOLDER}${SEP}${TOP}.par.log
 
 BITGEN_TOOL=${DIAMOND_PATH}${SEP}bitgen.exe
-BITGEN_FOLDER=${PRJ_ROOT}${SEP}bit
+BITGEN_FOLDER=${BUILD_PATH}${SEP}bit
 BITGEN_SCRIPT=${BITGEN_FOLDER}${SEP}${TOP}_bit.tcl
 BITFILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
 BITGEN_LOG=${BITGEN_FOLDER}${SEP}${TOP}.bitgen.log
@@ -85,8 +87,30 @@ BITGEN_LOG=${BITGEN_FOLDER}${SEP}${TOP}.bitgen.log
 help:
 	@echo $(Q)Usage: make ${SYNTH_NETLIST}$(Q)
 
-${SYNTH_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
+.PHONY: ${SYNTH_FOLDER}
+${SYNTH_FOLDER}:
 	$(shell mkdir -p ${SYNTH_FOLDER})
+
+.PHONY: ${NGD_FOLDER}
+${NGD_FOLDER}:
+	$(shell mkdir -p ${NGD_FOLDER})
+
+.PHONY: ${MAP_FOLDER}
+${MAP_FOLDER}:
+	$(shell mkdir -p ${MAP_FOLDER})
+
+.PHONY: ${PAR_FOLDER}
+${PAR_FOLDER}:
+	$(shell mkdir -p ${PAR_FOLDER})
+
+.PHONY: ${BITGEN_FOLDER}
+${BITGEN_FOLDER}:
+	$(shell mkdir -p ${BITGEN_FOLDER})
+
+.PHONY: folders
+folders: ${SYNTH_FOLDER} ${NGD_FOLDER} ${MAP_FOLDER} ${PAR_FOLDER} ${BITGEN_FOLDER}
+
+${SYNTH_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
 	$(shell printf $(Q)#-- Synplify project file.\n$(Q) > ${SYNTH_SCRIPT})
 	$(shell printf $(Q)#device options\n$(Q) >> ${SYNTH_SCRIPT})
 	$(shell printf $(Q)set_option -technology MACHXO3L\n$(Q) >> ${SYNTH_SCRIPT})
@@ -137,7 +161,8 @@ ${SYNTH_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
 
 ${SYNTH_NETLIST}2: ${SYNTH_SCRIPT}
 	$(shell mkdir -p ${SYNTH_FOLDER})
-	cd ${SYNTH_FOLDER} && ${SYNTH_TOOL} -prj $(shell realpath ${SYNTH_SCRIPT} --relative-to ${SYNTH_FOLDER})
+	cd ${SYNTH_FOLDER} && ${SYNTH_TOOL} \
+  -prj $(shell realpath ${SYNTH_SCRIPT} --relative-to ${SYNTH_FOLDER})
 
 ${SYNTH_NETLIST}: ${HDL_FILES} ${CONSTR_FILES}
 	$(shell mkdir -p ${SYNTH_FOLDER})
@@ -188,6 +213,9 @@ ${BITFILE}: ${PAR_NETLIST}
   -w \
   $(shell realpath ${PAR_NETLIST} --relative-to=${BITGEN_FOLDER}) \
   $(shell realpath ${BITFILE} --relative-to=${BITGEN_FOLDER})
+
+.PHONY: all
+ALL: ${BITFILE} folders
 
 .PHONY: clean
 clean:
