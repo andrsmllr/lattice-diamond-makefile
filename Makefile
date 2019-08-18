@@ -28,7 +28,7 @@ Q="
 TOP=test3
 ARCHITECTURE=MachXO3L
 DEVICE=LCMXO3L-6900C
-PERFMC_GRADE=5
+PERFORMANCE_GRADE=5
 PACKAGE=CABGA256
 LIBRARY=work
 
@@ -43,23 +43,28 @@ DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/ispfpga/bin/nt64/
 #DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/
 
 BUILD_PATH=${PRJ_ROOT}${SEP}build
-#SYNTH_TOOL=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/synpwrap.exe
-#SYNTH_FOLDER=${PRJ_ROOT}${SEP}synth
-#SYNTH_SCRIPT=${SYNTH_FOLDER}${SEP}${TOP}_synth.tcl
-#SYNTH_NETLIST=${SYNTH_FOLDER}${SEP}${TOP}.edif
-#SYNTH_LOG=${SYNTH_FOLDER}${SEP}${TOP}.srp
 
-SYNTH_TOOL=${DIAMOND_PATH}${SEP}synthesis.exe
-SYNTH_FOLDER=${BUILD_PATH}${SEP}syn
-SYNTH_FILES_VLOG=$(shell find ${HDL_PATH} \( -name "*.v" -o -name "*.sv" \) -exec realpath --relative-to=${SYNTH_FOLDER} {} \;)
-SYNTH_FILES_VHDL=$(shell find ${HDL_PATH} \( -name "*.vhd" -o -name "*.vhdl" \) -exec realpath --relative-to=${SYNTH_FOLDER} {} \;)
-SYNTH_OPT.HDL_PARAMS=
-SYNTH_OPT.SDC=${CONSTR_FILES}
-SYNTH_OPT.OPTIMIZATION=balanced
-SYNTH_SCRIPT=${SYNTH_FOLDER}${SEP}${TOP}_syn.tcl
-SYNTH_NETLIST=${SYNTH_FOLDER}${SEP}${TOP}.ngo
-SYNTH_PREF_FILE=${SYNTH_FOLDER}${SEP}${TOP}.lpf
-SYNTH_LOG=${SYNTH_FOLDER}${SEP}${TOP}.syn.log
+# Synplify synthesis.
+USE_SYNPLIFY=
+SYNP_TOOL=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/synpwrap.exe
+SYNP_FOLDER=${BUILD_PATH}${SEP}synp
+SYNP_SCRIPT=${SYNP_FOLDER}${SEP}${TOP}_synp.tcl
+SYNP_NETLIST=${SYNP_FOLDER}${SEP}${TOP}.edif
+SYNP_LOG=${SYNP_FOLDER}${SEP}${TOP}.synp.log
+EDIF2NGO_TOOL=${DIAMOND_PATH}${SEP}edif2ngd.exe
+
+# Diamond synthesis.
+SYN_TOOL=${DIAMOND_PATH}${SEP}synthesis.exe
+SYN_FOLDER=${BUILD_PATH}${SEP}syn
+SYN_FILES_VLOG=$(shell find ${HDL_PATH} \( -name "*.v" -o -name "*.sv" \) -exec realpath --relative-to=${SYN_FOLDER} {} \;)
+SYN_FILES_VHDL=$(shell find ${HDL_PATH} \( -name "*.vhd" -o -name "*.vhdl" \) -exec realpath --relative-to=${SYN_FOLDER} {} \;)
+SYN_OPT.HDL_PARAMS=
+SYN_OPT.SDC=${CONSTR_FILES}
+SYN_OPT.OPTIMIZATION=balanced
+SYN_SCRIPT=${SYN_FOLDER}${SEP}${TOP}_syn.tcl
+SYN_NETLIST=${SYN_FOLDER}${SEP}${TOP}.ngo
+SYN_PREF_FILE=${SYN_FOLDER}${SEP}${TOP}.lpf
+SYN_LOG=${SYN_FOLDER}${SEP}${TOP}.syn.log
 
 NGD_TOOL=${DIAMOND_PATH}${SEP}ngdbuild.exe
 NGD_FOLDER=${BUILD_PATH}${SEP}ngdbld
@@ -71,6 +76,7 @@ MAP_TOOL=${DIAMOND_PATH}${SEP}map.exe
 MAP_FOLDER=${BUILD_PATH}${SEP}map
 MAP_SCRIPT=${MAP_FOLDER}${SEP}${TOP}_map.tcl
 MAP_NETLIST=${MAP_FOLDER}${SEP}${TOP}.ncd
+MAP_PREF_FILE=${MAP_FOLDER}${SEP}${TOP}.prf
 MAP_LOG=${MAP_FOLDER}${SEP}${TOP}.map.log
 
 PAR_TOOL=${DIAMOND_PATH}${SEP}par.exe
@@ -85,142 +91,134 @@ BITGEN_SCRIPT=${BITGEN_FOLDER}${SEP}${TOP}_bit.tcl
 BITFILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
 BITGEN_LOG=${BITGEN_FOLDER}${SEP}${TOP}.bitgen.log
 
-.DEFAULT_GOAL=${SYNTH_NETLIST}
+.DEFAULT_GOAL=${BITFILE}
 
 .PHONY: help
 help:
-	@echo $(Q)Usage: make ${SYNTH_NETLIST}$(Q)
-
-.PHONY: ${SYNTH_FOLDER}
-${SYNTH_FOLDER}:
-	$(shell mkdir -p ${SYNTH_FOLDER})
-
-.PHONY: ${NGD_FOLDER}
-${NGD_FOLDER}:
-	$(shell mkdir -p ${NGD_FOLDER})
-
-.PHONY: ${MAP_FOLDER}
-${MAP_FOLDER}:
-	$(shell mkdir -p ${MAP_FOLDER})
-
-.PHONY: ${PAR_FOLDER}
-${PAR_FOLDER}:
-	$(shell mkdir -p ${PAR_FOLDER})
-
-.PHONY: ${BITGEN_FOLDER}
-${BITGEN_FOLDER}:
-	$(shell mkdir -p ${BITGEN_FOLDER})
+	@echo $(Q)Usage: make <target>$(Q)
+	@echo $(Q)  where target is one of$(Q)
+	@echo $(Q)    ${SYN_NETLIST}$(Q)
+	@echo $(Q)    ${SYNP_NETLIST} (only with USE_SYNPLIFY)$(Q)
+	@echo $(Q)    ${NGD_NETLIST}$(Q)
+	@echo $(Q)    ${MAP_NETLIST}$(Q)
+	@echo $(Q)    ${PAR_NETLIST}$(Q)
+	@echo $(Q)    ${BITFILE} (default)$(Q)
 
 .PHONY: folders
-folders: ${SYNTH_FOLDER} ${NGD_FOLDER} ${MAP_FOLDER} ${PAR_FOLDER} ${BITGEN_FOLDER}
+folders:
+	$(shell mkdir -p ${SYN_FOLDER} $(if ${USE_SYNPLIFY},${SYNP_FOLDER},) ${NGD_FOLDER} ${MAP_FOLDER} ${PAR_FOLDER} ${BITGEN_FOLDER})
 
-${SYNTH_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
-	$(shell printf $(Q)#-- Synplify project file.\n$(Q) > ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#device options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -technology MACHXO3L\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -part LCMXO3L_6900C\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -package BG256C\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -speed_grade -5\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#compilation/mapping options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -symbolic_fsm_compiler true\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -resource_sharing true\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#use verilog 2001 standard option\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -vlog_std v2001\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#map options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -frequency 100\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -maxfan 1000\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -auto_constrain_io 0\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -disable_io_insertion false\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -retiming false\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -pipe true\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -force_gsr false\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -compiler_compatible 0\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -dup 1\n$(Q) >> ${SYNTH_SCRIPT})
+${SYNP_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
+	$(shell mkdir -p ${SYNP_FOLDER})
+	$(shell printf $(Q)#-- Synplify project file.\n$(Q) > ${SYNP_SCRIPT})
+	$(shell printf $(Q)#device options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -technology MACHXO3L\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -part LCMXO3L_6900C\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -package BG256C\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -speed_grade -5\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#compilation/mapping options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -symbolic_fsm_compiler true\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -resource_sharing true\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#use verilog 2001 standard option\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -vlog_std v2001\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#map options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -frequency 100\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -maxfan 1000\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -auto_constrain_io 0\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -disable_io_insertion false\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -retiming false\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -pipe true\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -force_gsr false\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -compiler_compatible 0\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -dup 1\n$(Q) >> ${SYNP_SCRIPT})
 	$(shell for f in ${CONSTR_FILES}; do \
-    printf $(Q)add_file -constraint $$(realpath $$f --relative-to ${SYNTH_FOLDER})\n$(Q) >> ${SYNTH_SCRIPT}; \
+    printf $(Q)add_file -constraint $$(realpath $$f --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT}; \
   done)
-	$(shell printf $(Q)set_option -default_enum_encoding default\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#simulation options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#timing analysis options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#automatic place and route (vendor) options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -write_apr_constraint 1\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#synplifyPro options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -fix_gated_and_generated_clocks 1\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -update_models_cp 0\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -resolve_multiple_driver 0\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#-- add_file options\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -include_path $(shell realpath ${INCLUDE_PATH} --relative-to ${SYNTH_FOLDER})\n$(Q) >> ${SYNTH_SCRIPT})
+	$(shell printf $(Q)set_option -default_enum_encoding default\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#simulation options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#timing analysis options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#automatic place and route (vendor) options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -write_apr_constraint 1\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#synplifyPro options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -fix_gated_and_generated_clocks 1\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -update_models_cp 0\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -resolve_multiple_driver 0\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#-- add_file options\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -include_path $(shell realpath ${INCLUDE_PATH} --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT})
 	$(shell for f in ${HDL_FILES}; do \
-    printf $(Q)add_file -verilog $$(realpath $$f --relative-to ${SYNTH_FOLDER})\n$(Q) >> ${SYNTH_SCRIPT}; \
+    printf $(Q)add_file -verilog $$(realpath $$f --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT}; \
   done)
-	$(shell printf $(Q)#-- top module name\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)set_option -top_module ${TOP}\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#-- set result format/file last\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)project -result_file $(shell realpath ${SYNTH_NETLIST} --relative-to ${SYNTH_FOLDER})\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#-- error message log file\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)project -SYNTH_LOG $(shell realpath ${SYNTH_LOG} --relative-to ${SYNTH_FOLDER})\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#-- set any command lines input by customer\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)#-- run Synplify with 'arrange HDL file'\n$(Q) >> ${SYNTH_SCRIPT})
-	$(shell printf $(Q)project -run -clean\n$(Q) >> ${SYNTH_SCRIPT})
+	$(shell printf $(Q)#-- top module name\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)set_option -top_module ${TOP}\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#-- set result format/file last\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)project -result_file $(shell realpath ${SYNP_NETLIST} --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#-- error message log file\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)project -SYN_LOG $(shell realpath ${SYNP_LOG} --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#-- set any command lines input by customer\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)#-- run Synplify with 'arrange HDL file'\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf $(Q)project -run -clean\n$(Q) >> ${SYNP_SCRIPT})
 
-${SYNTH_NETLIST}2: ${SYNTH_SCRIPT}
-	$(shell mkdir -p ${SYNTH_FOLDER})
-	cd ${SYNTH_FOLDER} && ${SYNTH_TOOL} \
-  -prj $(shell realpath ${SYNTH_SCRIPT} --relative-to ${SYNTH_FOLDER})
+${SYNP_NETLIST}: ${SYNP_SCRIPT}
+	cd ${SYNP_FOLDER} && ${SYNP_TOOL} \
+    -prj $(shell realpath ${SYNP_SCRIPT} --relative-to ${SYNP_FOLDER})
+	${EDIF2NGO_TOOL} \
+    -l ${ARCHITECTURE} \
+    -d ${DEVICE} \
+    -cbn \
+    ${SYNP_NETLIST} \
+    ${SYN_NETLIST}
 
-${SYNTH_NETLIST}: ${HDL_FILES} ${CONSTR_FILES}
-	$(shell mkdir -p ${SYNTH_FOLDER})
-	cd ${SYNTH_FOLDER} && ${SYNTH_TOOL} \
-  -a ${ARCHITECTURE} \
-  -d ${DEVICE} \
-  -s ${PERFMC_GRADE} \
-  -t ${PACKAGE} \
-  -p $(shell realpath ${INCLUDE_PATH} --relative-to=${SYNTH_FOLDER}) \
-  -top ${TOP} \
-  -hdl_param ${SYNTH_OPT.HDL_PARAMS} \
-  -ver ${SYNTH_FILES_VLOG} \
-  -optimization_goal ${SYNTH_OPT.OPTIMIZATION} \
-  -logfile $(shell realpath ${SYNTH_LOG} --relative-to=${SYNTH_FOLDER}) \
-  -sdc $(shell realpath ${CONSTR_FILES} --relative-to=${SYNTH_FOLDER}) \
-  -lpf 1 \
-  -ngd $(shell realpath ${NGD_NETLIST} --relative-to=${SYNTH_FOLDER})
-  # -ngo $(shell realpath ${SYNTH_NETLIST} --relative-to=${SYNTH_FOLDER})
+${SYN_NETLIST}: ${HDL_FILES} ${CONSTR_FILES}
+	cd ${SYN_FOLDER} && ${SYN_TOOL} \
+    -a ${ARCHITECTURE} \
+    -d ${DEVICE} \
+    -s ${PERFORMANCE_GRADE} \
+    -t ${PACKAGE} \
+    -top ${TOP} \
+    -optimization_goal ${SYN_OPT.OPTIMIZATION} \
+    $(if ${SYN_OPT.HDL_PARAMS},-hdl_param ${SYN_OPT.HDL_PARAMS},) \
+    $(if ${INCLUDE_PATH},-p $(shell realpath ${INCLUDE_PATH} --relative-to=${SYN_FOLDER}),) \
+    $(if ${SYN_FILES_VLOG},-ver ${SYN_FILES_VLOG},) \
+    $(if ${SYN_FILES_VHDL},-vhd ${SYN_FILES_VHDL},) \
+    $(if ${SYN_LOG},-logfile $(shell realpath ${SYN_LOG} --relative-to=${SYN_FOLDER}),) \
+    $(if ${CONSTR_FILES},-sdc $(shell realpath ${CONSTR_FILES} --relative-to=${SYN_FOLDER}),) \
+    -lpf 1 \
+    -ngo $(shell realpath ${SYN_NETLIST} --relative-to=${SYN_FOLDER})
+    # -ngd $(shell realpath ${NGD_NETLIST} --relative-to=${SYN_FOLDER})
 
-${NGD_NETLIST}: ${SYNTH_NETLIST}
-	$(shell mkdir -p ${NGD_FOLDER})
-	# cd ${NGD_FOLDER} && ${NGD_TOOL} \
-  # -a ${ARCHITECTURE} \
-  # -d ${DEVICE} \
-  # $(shell realpath ${SYNTH_NETLIST} --relative-to=${NGD_FOLDER}) \
-  # $(shell realpath ${NGD_NETLIST} --relative-to=${NGD_FOLDER})
+${NGD_NETLIST}: $(if ${USE_SYNPLIFY},${SYNP_NETLIST},${SYN_NETLIST})
+	cd ${NGD_FOLDER} && ${NGD_TOOL} \
+    -a ${ARCHITECTURE} \
+    -d ${DEVICE} \
+    $(shell realpath ${SYN_NETLIST} --relative-to=${NGD_FOLDER}) \
+    $(shell realpath ${NGD_NETLIST} --relative-to=${NGD_FOLDER})
   
 ${MAP_NETLIST}: ${NGD_NETLIST}
-	$(shell mkdir -p ${MAP_FOLDER})
 	cd ${MAP_FOLDER} && ${MAP_TOOL} \
-  $(shell realpath ${NGD_NETLIST} --relative-to=${MAP_FOLDER}) \
-  -o $(shell realpath ${MAP_NETLIST} --relative-to=${MAP_FOLDER}) \
-  -a ${ARCHITECTURE} \
-  -p ${DEVICE} \
-  -s ${PERFMC_GRADE} \
-  -t ${PACKAGE}
+    -a ${ARCHITECTURE} \
+    -p ${DEVICE} \
+    -s ${PERFORMANCE_GRADE} \
+    -t ${PACKAGE} \
+    $(shell realpath ${NGD_NETLIST} --relative-to=${MAP_FOLDER}) \
+    -o $(shell realpath ${MAP_NETLIST} --relative-to=${MAP_FOLDER}) \
+    -pr $(shell realpath ${MAP_PREF_FILE} --relative-to=${MAP_FOLDER})
 
 ${PAR_NETLIST}: ${MAP_NETLIST}
-	$(shell mkdir -p ${PAR_FOLDER})
 	cd ${PAR_FOLDER} && ${PAR_TOOL} \
-  -w \
-  $(shell realpath ${MAP_NETLIST} --relative-to=${PAR_FOLDER}) \
-  $(shell realpath ${PAR_NETLIST} --relative-to=${PAR_FOLDER})
+    -w \
+    $(shell realpath ${MAP_NETLIST} --relative-to=${PAR_FOLDER}) \
+    $(shell realpath ${PAR_NETLIST} --relative-to=${PAR_FOLDER})
 
 ${BITFILE}: ${PAR_NETLIST}
-	$(shell mkdir -p ${BITGEN_FOLDER})
 	cd ${BITGEN_FOLDER} && ${BITGEN_TOOL} \
-  -w \
-  $(shell realpath ${PAR_NETLIST} --relative-to=${BITGEN_FOLDER}) \
-  $(shell realpath ${BITFILE} --relative-to=${BITGEN_FOLDER})
+    -w \
+    $(shell realpath ${PAR_NETLIST} --relative-to=${BITGEN_FOLDER}) \
+    $(shell realpath ${BITFILE} --relative-to=${BITGEN_FOLDER})
 
 .PHONY: all
 ALL: ${BITFILE} folders
 
 .PHONY: clean
 clean:
-	-rm -rf ${SYNTH_FOLDER}*
+	-rm -rf ${SYN_FOLDER}${SEP}* ${SYNP_FOLDER}${SEP}* ${NGD_FOLDER}${SEP}* \
+    ${MAP_FOLDER}${SEP}* ${PAR_FOLDER}${SEP}* ${BITGEN_FOLDER}${SEP}*
