@@ -25,7 +25,7 @@ PRJ_ROOT=.
 SEP=/
 Q="
 
-TOP=test3
+TOP=top
 ARCHITECTURE=MachXO3L
 DEVICE=LCMXO3L-6900C
 PERFORMANCE_GRADE=5
@@ -39,8 +39,8 @@ CONSTR_FOLDER=${PRJ_ROOT}${SEP}constr
 CONSTR_FILES=$(shell find ${CONSTR_FOLDER} -name "*.sdc")
 INCLUDE_PATH=${PRJ_ROOT}${SEP}inc
 
-DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/ispfpga/bin/nt64/
-#DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/
+DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/ispfpga/bin/nt64
+DIAMOND_PATH2=/cygdrive/c/lattice_diamond/diamond/3.10_x64/bin/nt64/
 
 BUILD_PATH=${PRJ_ROOT}${SEP}build
 
@@ -84,12 +84,22 @@ PAR_FOLDER=${BUILD_PATH}${SEP}par
 PAR_SCRIPT=${PAR_FOLDER}${SEP}${TOP}_par.tcl
 PAR_NETLIST=${PAR_FOLDER}${SEP}${TOP}.ncd
 PAR_LOG=${PAR_FOLDER}${SEP}${TOP}.par.log
+TIMING_TOOL=${DIAMOND_PATH}${SEP}trce.exe
+TIMING_REPORT=${PAR_FOLDER}${SEP}${TOP}.tim.log
+IOTIMING_TOOL=${DIAMOND_PATH}${SEP}iotiming.exe
+IOTIMING_REPORT=${PAR_FOLDER}${SEP}${TOP}.iotim.log
+SSOANA_TOOL=${DIAMOND_PATH}${SEP}ssoana.exe
+SSOANA_REPORT=${PAR_FOLDER}${SEP}${TOP}.ssoana.log
 
 BITGEN_TOOL=${DIAMOND_PATH}${SEP}bitgen.exe
 BITGEN_FOLDER=${BUILD_PATH}${SEP}bit
 BITGEN_SCRIPT=${BITGEN_FOLDER}${SEP}${TOP}_bit.tcl
 BITFILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
 BITGEN_LOG=${BITGEN_FOLDER}${SEP}${TOP}.bitgen.log
+
+PROGRAM_TOOL=${DIAMOND_PATH2}${SEP}pgrcmd.exe
+PROGRAM_FILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
+PROGRAM_LOG=${BITGEN_FOLDER}${SEP}${TOP}.program.log
 
 .DEFAULT_GOAL=${BITFILE}
 
@@ -103,10 +113,6 @@ help:
 	@echo $(Q)    ${MAP_NETLIST}$(Q)
 	@echo $(Q)    ${PAR_NETLIST}$(Q)
 	@echo $(Q)    ${BITFILE} (default)$(Q)
-
-.PHONY: folders
-folders:
-	$(shell mkdir -p ${SYN_FOLDER} $(if ${USE_SYNPLIFY},${SYNP_FOLDER},) ${NGD_FOLDER} ${MAP_FOLDER} ${PAR_FOLDER} ${BITGEN_FOLDER})
 
 ${SYNP_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
 	$(shell mkdir -p ${SYNP_FOLDER})
@@ -200,6 +206,7 @@ ${MAP_NETLIST}: ${NGD_NETLIST}
     -s ${PERFORMANCE_GRADE} \
     -t ${PACKAGE} \
     $(shell realpath ${NGD_NETLIST} --relative-to=${MAP_FOLDER}) \
+    $(shell realpath ${SYN_PREF_FILE} --relative-to=${MAP_FOLDER}) \
     -o $(shell realpath ${MAP_NETLIST} --relative-to=${MAP_FOLDER}) \
     -pr $(shell realpath ${MAP_PREF_FILE} --relative-to=${MAP_FOLDER})
 
@@ -214,6 +221,47 @@ ${BITFILE}: ${PAR_NETLIST}
     -w \
     $(shell realpath ${PAR_NETLIST} --relative-to=${BITGEN_FOLDER}) \
     $(shell realpath ${BITFILE} --relative-to=${BITGEN_FOLDER})
+
+${TIMING_REPORT}: ${PAR_NETLIST}
+	cd ${PAR_FOLDER} && ${TIMING_TOOL} \
+    -clockdomain \
+    -sethld \
+    -setuphold \
+    -e 100 \
+    $(shell realpath ${PAR_NETLIST} --relative-to=${PAR_FOLDER}) \
+    $(shell realpath ${MAP_PREF_FILE} --relative-to=${PAR_FOLDER}) \
+    -o $(shell realpath ${TIMING_REPORT} --relative-to=${PAR_FOLDER})
+
+${IOTIMING_REPORT}: ${PAR_NETLIST}
+	cd ${PAR_FOLDER} && ${IOTIMING_TOOL} \
+    -s \
+    $(shell realpath ${PAR_NETLIST} --relative-to=${PAR_FOLDER}) \
+    $(shell realpath ${MAP_PREF_FILE} --relative-to=${PAR_FOLDER}) \
+    -o $(shell realpath ${IOTIMING_REPORT} --relative-to=${PAR_FOLDER})
+
+${SSOANA_REPORT}: ${PAR_NETLIST}
+	cd ${PAR_FOLDER} && ${SSOANA_TOOL} \
+    -d ${DEVICE} \
+    -p ${PACKAGE} \
+    -o $(shell realpath ${SSOANA_REPORT} --relative-to=${PAR_FOLDER}) \
+    $(shell realpath ${PAR_NETLIST} --relative-to=${PAR_FOLDER}) \
+    $(shell realpath ${SYN_PREF_FILE} --relative-to=${PAR_FOLDER})
+
+.PHONY: timing
+timing: ${TIMING_REPORT} ${IOTIMING_REPORT}
+
+.PHONY: program
+program: ${PROGRAM_FILE}
+	cd ${BITGEN_FOLDER} && ${PROGRAM_TOOL} \
+    -infile $(shell realpath ${PROGRAM_FILE} --relative-to=${BITGEN_FOLDER}) \
+    -logile $(shell realpath ${PROGRAM_LOG} --relative-to=${BITGEN_FOLDER}) \
+    -cabletype lattice \
+    -portaddress FTUSB-0 \
+    -TCK 2
+
+.PHONY: folders
+folders:
+	$(shell mkdir -p ${SYN_FOLDER} $(if ${USE_SYNPLIFY},${SYNP_FOLDER},) ${NGD_FOLDER} ${MAP_FOLDER} ${PAR_FOLDER} ${BITGEN_FOLDER})
 
 .PHONY: all
 ALL: ${BITFILE} folders
