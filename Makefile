@@ -23,7 +23,8 @@
 
 PRJ_ROOT=.
 SEP=/
-Q="
+Q='
+QQ="
 
 TOP=top
 ARCHITECTURE=MachXO3L
@@ -36,7 +37,8 @@ HDL_PATH=${PRJ_ROOT}${SEP}hdl
 HDL_FILES=$(shell find ${HDL_PATH} -name "*.v" -o -name "*.sv")
 HDL_FILES_VLOG=$(shell find ${HDL_PATH} -name "*.v" -o -name "*.sv")
 CONSTR_FOLDER=${PRJ_ROOT}${SEP}constr
-CONSTR_FILES=$(shell find ${CONSTR_FOLDER} -name "*.sdc")
+CONSTR_FILE=$(shell find ${CONSTR_FOLDER} -name "*.sdc")
+PREF_FILE=$(shell find ${CONSTR_FOLDER} -name "*.lpf")
 INCLUDE_PATH=${PRJ_ROOT}${SEP}inc
 
 DIAMOND_PATH=/cygdrive/c/lattice_diamond/diamond/3.10_x64/ispfpga/bin/nt64
@@ -59,7 +61,7 @@ SYN_FOLDER=${BUILD_PATH}${SEP}syn
 SYN_FILES_VLOG=$(shell find ${HDL_PATH} \( -name "*.v" -o -name "*.sv" \) -exec realpath --relative-to=${SYN_FOLDER} {} \;)
 SYN_FILES_VHDL=$(shell find ${HDL_PATH} \( -name "*.vhd" -o -name "*.vhdl" \) -exec realpath --relative-to=${SYN_FOLDER} {} \;)
 SYN_OPT.HDL_PARAMS=
-SYN_OPT.SDC=${CONSTR_FILES}
+SYN_OPT.SDC=${CONSTR_FILE}
 SYN_OPT.OPTIMIZATION=balanced
 SYN_SCRIPT=${SYN_FOLDER}${SEP}${TOP}_syn.tcl
 SYN_NETLIST=${SYN_FOLDER}${SEP}${TOP}.ngo
@@ -94,14 +96,17 @@ SSOANA_REPORT=${PAR_FOLDER}${SEP}${TOP}.ssoana.log
 BITGEN_TOOL=${DIAMOND_PATH}${SEP}bitgen.exe
 BITGEN_FOLDER=${BUILD_PATH}${SEP}bit
 BITGEN_SCRIPT=${BITGEN_FOLDER}${SEP}${TOP}_bit.tcl
-BITFILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
+# .bit file is for SRAM programming, .jed file for NVCM programming.
+
+BITGEN_BITFILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
+BITGEN_JEDFILE=${BITGEN_FOLDER}${SEP}${TOP}.jed
 BITGEN_LOG=${BITGEN_FOLDER}${SEP}${TOP}.bitgen.log
 
 PROGRAM_TOOL=${DIAMOND_PATH2}${SEP}pgrcmd.exe
-PROGRAM_FILE=${BITGEN_FOLDER}${SEP}${TOP}.bit
+PROGRAM_FILE=${BITGEN_FOLDER}${SEP}${TOP}.xcf
 PROGRAM_LOG=${BITGEN_FOLDER}${SEP}${TOP}.program.log
 
-.DEFAULT_GOAL=${BITFILE}
+.DEFAULT_GOAL=${BITGEN_BITFILE}
 
 .PHONY: help
 help:
@@ -112,57 +117,57 @@ help:
 	@echo $(Q)    ${NGD_NETLIST}$(Q)
 	@echo $(Q)    ${MAP_NETLIST}$(Q)
 	@echo $(Q)    ${PAR_NETLIST}$(Q)
-	@echo $(Q)    ${BITFILE} (default)$(Q)
+	@echo $(Q)    ${BITGEN_BITFILE} (default)$(Q)
 
-${SYNP_SCRIPT}: ${HDL_FILES} ${CONSTR_FILES}
+${SYNP_SCRIPT}: ${HDL_FILES} ${CONSTR_FILE}
 	$(shell mkdir -p ${SYNP_FOLDER})
-	$(shell printf $(Q)#-- Synplify project file.\n$(Q) > ${SYNP_SCRIPT})
-	$(shell printf $(Q)#device options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -technology MACHXO3L\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -part LCMXO3L_6900C\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -package BG256C\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -speed_grade -5\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#compilation/mapping options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -symbolic_fsm_compiler true\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -resource_sharing true\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#use verilog 2001 standard option\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -vlog_std v2001\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#map options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -frequency 100\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -maxfan 1000\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -auto_constrain_io 0\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -disable_io_insertion false\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -retiming false\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -pipe true\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -force_gsr false\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -compiler_compatible 0\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -dup 1\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell for f in ${CONSTR_FILES}; do \
-    printf $(Q)add_file -constraint $$(realpath $$f --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT}; \
+	$(shell printf ${QQ}#-- Synplify project file.\n${QQ} > ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#device options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -technology MACHXO3L\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -part LCMXO3L_6900C\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -package BG256C\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -speed_grade -5\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#compilation/mapping options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -symbolic_fsm_compiler true\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -resource_sharing true\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#use verilog 2001 standard option\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -vlog_std v2001\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#map options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -frequency 100\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -maxfan 1000\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -auto_constrain_io 0\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -disable_io_insertion false\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -retiming false\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -pipe true\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -force_gsr false\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -compiler_compatible 0\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -dup 1\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell for f in ${CONSTR_FILE}; do \
+    printf ${QQ}add_file -constraint $$(realpath $$f --relative-to ${SYN_FOLDER})\n${QQ} >> ${SYNP_SCRIPT}; \
   done)
-	$(shell printf $(Q)set_option -default_enum_encoding default\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#simulation options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#timing analysis options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#automatic place and route (vendor) options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -write_apr_constraint 1\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#synplifyPro options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -fix_gated_and_generated_clocks 1\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -update_models_cp 0\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -resolve_multiple_driver 0\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#-- add_file options\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -include_path $(shell realpath ${INCLUDE_PATH} --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -default_enum_encoding default\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#simulation options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#timing analysis options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#automatic place and route (vendor) options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -write_apr_constraint 1\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#synplifyPro options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -fix_gated_and_generated_clocks 1\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -update_models_cp 0\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -resolve_multiple_driver 0\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#-- add_file options\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -include_path $(shell realpath ${INCLUDE_PATH} --relative-to ${SYN_FOLDER})\n${QQ} >> ${SYNP_SCRIPT})
 	$(shell for f in ${HDL_FILES}; do \
-    printf $(Q)add_file -verilog $$(realpath $$f --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT}; \
+    printf ${QQ}add_file -verilog $$(realpath $$f --relative-to ${SYN_FOLDER})\n${QQ} >> ${SYNP_SCRIPT}; \
   done)
-	$(shell printf $(Q)#-- top module name\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)set_option -top_module ${TOP}\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#-- set result format/file last\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)project -result_file $(shell realpath ${SYNP_NETLIST} --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#-- error message log file\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)project -SYN_LOG $(shell realpath ${SYNP_LOG} --relative-to ${SYN_FOLDER})\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#-- set any command lines input by customer\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)#-- run Synplify with 'arrange HDL file'\n$(Q) >> ${SYNP_SCRIPT})
-	$(shell printf $(Q)project -run -clean\n$(Q) >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#-- top module name\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}set_option -top_module ${TOP}\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#-- set result format/file last\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}project -result_file $(shell realpath ${SYNP_NETLIST} --relative-to ${SYN_FOLDER})\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#-- error message log file\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}project -SYN_LOG $(shell realpath ${SYNP_LOG} --relative-to ${SYN_FOLDER})\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#-- set any command lines input by customer\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}#-- run Synplify with 'arrange HDL file'\n${QQ} >> ${SYNP_SCRIPT})
+	$(shell printf ${QQ}project -run -clean\n${QQ} >> ${SYNP_SCRIPT})
 
 ${SYNP_NETLIST}: ${SYNP_SCRIPT}
 	cd ${SYNP_FOLDER} && ${SYNP_TOOL} \
@@ -174,7 +179,7 @@ ${SYNP_NETLIST}: ${SYNP_SCRIPT}
     ${SYNP_NETLIST} \
     ${SYN_NETLIST}
 
-${SYN_NETLIST}: ${HDL_FILES} ${CONSTR_FILES}
+${SYN_NETLIST}: ${HDL_FILES} ${CONSTR_FILE}
 	cd ${SYN_FOLDER} && ${SYN_TOOL} \
     -a ${ARCHITECTURE} \
     -d ${DEVICE} \
@@ -187,9 +192,10 @@ ${SYN_NETLIST}: ${HDL_FILES} ${CONSTR_FILES}
     $(if ${SYN_FILES_VLOG},-ver ${SYN_FILES_VLOG},) \
     $(if ${SYN_FILES_VHDL},-vhd ${SYN_FILES_VHDL},) \
     $(if ${SYN_LOG},-logfile $(shell realpath ${SYN_LOG} --relative-to=${SYN_FOLDER}),) \
-    $(if ${CONSTR_FILES},-sdc $(shell realpath ${CONSTR_FILES} --relative-to=${SYN_FOLDER}),) \
+    $(if ${CONSTR_FILE},-sdc $(shell realpath ${CONSTR_FILE} --relative-to=${SYN_FOLDER}),) \
     -lpf 1 \
     -ngo $(shell realpath ${SYN_NETLIST} --relative-to=${SYN_FOLDER})
+    #-lpf $(shell realpath ${PREF_FILE} --relative-to=${SYN_FOLDER}) \
     # -ngd $(shell realpath ${NGD_NETLIST} --relative-to=${SYN_FOLDER})
 
 ${NGD_NETLIST}: $(if ${USE_SYNPLIFY},${SYNP_NETLIST},${SYN_NETLIST})
@@ -206,7 +212,7 @@ ${MAP_NETLIST}: ${NGD_NETLIST}
     -s ${PERFORMANCE_GRADE} \
     -t ${PACKAGE} \
     $(shell realpath ${NGD_NETLIST} --relative-to=${MAP_FOLDER}) \
-    $(shell realpath ${SYN_PREF_FILE} --relative-to=${MAP_FOLDER}) \
+    $(shell realpath ${PREF_FILE} --relative-to=${MAP_FOLDER}) \
     -o $(shell realpath ${MAP_NETLIST} --relative-to=${MAP_FOLDER}) \
     -pr $(shell realpath ${MAP_PREF_FILE} --relative-to=${MAP_FOLDER})
 
@@ -216,11 +222,69 @@ ${PAR_NETLIST}: ${MAP_NETLIST}
     $(shell realpath ${MAP_NETLIST} --relative-to=${PAR_FOLDER}) \
     $(shell realpath ${PAR_NETLIST} --relative-to=${PAR_FOLDER})
 
-${BITFILE}: ${PAR_NETLIST}
+${BITGEN_BITFILE}: ${PAR_NETLIST}
 	cd ${BITGEN_FOLDER} && ${BITGEN_TOOL} \
     -w \
     $(shell realpath ${PAR_NETLIST} --relative-to=${BITGEN_FOLDER}) \
-    $(shell realpath ${BITFILE} --relative-to=${BITGEN_FOLDER})
+    $(shell realpath ${BITGEN_BITFILE} --relative-to=${BITGEN_FOLDER})
+	cd ${BITGEN_FOLDER} && ${BITGEN_TOOL} \
+    -w \
+    -jedec \
+    $(shell realpath ${PAR_NETLIST} --relative-to=${BITGEN_FOLDER}) \
+    $(shell realpath ${BITGEN_JEDFILE} --relative-to=${BITGEN_FOLDER})
+
+${PROGRAM_FILE}: ${BITGEN_BITFILE}
+# Double quotes which must be printed as such need to be escaped.
+	cd ${BITGEN_FOLDER}
+	$(shell printf ${QQ}<?xml version='1.0' encoding='utf-8' ?>\n${QQ} > ${PROGRAM_FILE})
+	$(shell printf ${QQ}<!DOCTYPE		ispXCF	SYSTEM	\"IspXCF.dtd\" >\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}<ispXCF version=\"3.9.0\">\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  <Comment></Comment>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  <Chain>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <Comm>JTAG</Comm>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <Device>${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <SelectedProg value=\"TRUE\"/>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Pos>1</Pos>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Vendor>Lattice</Vendor>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Family>${ARCHITECTURE}</Family>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Name>${DEVICE}</Name>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <IDCode>0x412bd043</IDCode>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Package>All</Package>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <PON>${DEVICE}</PON>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Bypass>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <InstrLen>8</InstrLen>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <InstrVal>11111111</InstrVal>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <BScanLen>1</BScanLen>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <BScanVal>0</BScanVal>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      </Bypass>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <File>$$(realpath ${BITGEN_BITFILE} --relative-to ${BITGEN_FOLDER})</File>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <FileTime>08/20/19 20:08:50</FileTime>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Operation>SRAM Erase,Program,Verify</Operation>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      <Option>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <SVFVendor>JTAG STANDARD</SVFVendor>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <IOState>HighZ</IOState>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <PreloadLength>664</PreloadLength>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <IOVectorData>0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF</IOVectorData>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <Usercode>0x00000000</Usercode>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}        <AccessMode>SRAM</AccessMode>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}      </Option>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    </Device>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  </Chain>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  <ProjectOptions>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <Program>SEQUENTIAL</Program>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <Process>ENTIRED CHAIN</Process>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <OperationOverride>No Override</OperationOverride>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <StartTAP>TLR</StartTAP>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <EndTAP>TLR</EndTAP>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <VerifyUsercode value=\"FALSE\"/>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <TCKDelay>1</TCKDelay>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  </ProjectOptions>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  <CableOptions>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <CableName>USB2</CableName>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <PortAdd>FTUSB-0</PortAdd>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}    <USBID>Lattice XO3L Starter Kit A Location 0000 Serial A</USBID>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}  </CableOptions>\n${QQ} >> ${PROGRAM_FILE})
+	$(shell printf ${QQ}</ispXCF>\n${QQ} >> ${PROGRAM_FILE})
 
 ${TIMING_REPORT}: ${PAR_NETLIST}
 	cd ${PAR_FOLDER} && ${TIMING_TOOL} \
@@ -255,7 +319,7 @@ program: ${PROGRAM_FILE}
 	cd ${BITGEN_FOLDER} && ${PROGRAM_TOOL} \
     -infile $(shell realpath ${PROGRAM_FILE} --relative-to=${BITGEN_FOLDER}) \
     -logile $(shell realpath ${PROGRAM_LOG} --relative-to=${BITGEN_FOLDER}) \
-    -cabletype lattice \
+    -cabletype USB2 \
     -portaddress FTUSB-0 \
     -TCK 2
 
@@ -264,7 +328,7 @@ folders:
 	$(shell mkdir -p ${SYN_FOLDER} $(if ${USE_SYNPLIFY},${SYNP_FOLDER},) ${NGD_FOLDER} ${MAP_FOLDER} ${PAR_FOLDER} ${BITGEN_FOLDER})
 
 .PHONY: all
-ALL: ${BITFILE} folders
+ALL: ${BITGEN_BITFILE} folders
 
 .PHONY: clean
 clean:
